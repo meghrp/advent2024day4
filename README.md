@@ -161,6 +161,7 @@ Instagram scraping can work without authentication, but authenticated access pro
    TARGET_INSTAGRAM_USER=username_to_scrape
    MAX_POSTS=100
    DRY_RUN=false
+   OUTPUT_ONLY=false
    LOG_LEVEL=INFO
    ```
 
@@ -188,6 +189,9 @@ python instagram_to_apple_music.py --posts 50
 # Dry run - see what would be added without actually adding
 python instagram_to_apple_music.py --dry-run
 
+# Output only - just scrape and save to file, skip Apple Music
+python instagram_to_apple_music.py --output-only
+
 # Save results to a CSV file
 python instagram_to_apple_music.py --output results.csv
 
@@ -199,6 +203,8 @@ python instagram_to_apple_music.py --user some_user --posts 50 --dry-run --outpu
 ```
 
 ### Example Workflow
+
+**Option 1: Full Apple Music Integration**
 
 1. **First, do a dry run to see what would be added:**
 
@@ -217,6 +223,24 @@ python instagram_to_apple_music.py --user some_user --posts 50 --dry-run --outpu
    ```bash
    cat logs/instagram_to_apple_music_*.log
    ```
+
+**Option 2: Output Only (Skip Apple Music)**
+
+If you only want to scrape songs and save them to a file without Apple Music integration:
+
+```bash
+# Scrape and save to a file (no Apple Music credentials needed)
+python instagram_to_apple_music.py --user your_favorite_artist --posts 50 --output-only
+
+# This will create a CSV file with all the songs found
+# You can then manually review and add songs to Apple Music, or use the file for other purposes
+```
+
+This mode is useful when:
+- You want to discover songs without adding them to your library yet
+- You don't have Apple Music API credentials set up
+- You want to review songs first before importing
+- You want to export songs for use with other services
 
 ## Project Structure
 

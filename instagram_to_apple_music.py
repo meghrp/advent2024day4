@@ -12,6 +12,7 @@ Options:
     --user USERNAME       Instagram username to scrape (overrides .env)
     --posts N            Number of posts to scrape (default: 100)
     --dry-run            Show what would be added without actually adding
+    --output-only        Only scrape and save to file, skip Apple Music integration
     --output FILE        Save results to CSV file
     --help              Show this help message
 """
@@ -42,6 +43,7 @@ class InstagramToAppleMusic:
         """
         self.config = config
         self.dry_run = config.get('dry_run', False)
+        self.output_only = config.get('output_only', False)
         self.logger = self._setup_logging(config.get('log_level', 'INFO'))
 
         # Initialize Instagram scraper
@@ -50,8 +52,8 @@ class InstagramToAppleMusic:
             password=config.get('instagram_password')
         )
 
-        # Initialize Apple Music client (if not in dry run mode)
-        if not self.dry_run:
+        # Initialize Apple Music client (if not in dry run or output-only mode)
+        if not self.dry_run and not self.output_only:
             try:
                 self.apple_music_client = AppleMusicClient(
                     team_id=config.get('apple_team_id'),
@@ -65,7 +67,10 @@ class InstagramToAppleMusic:
                 sys.exit(1)
         else:
             self.apple_music_client = None
-            self.logger.info("Running in DRY RUN mode - no songs will be added")
+            if self.dry_run:
+                self.logger.info("Running in DRY RUN mode - no songs will be added")
+            elif self.output_only:
+                self.logger.info("Running in OUTPUT ONLY mode - songs will be saved to file only")
 
     def _setup_logging(self, level: str) -> logging.Logger:
         """Setup logging configuration."""
@@ -120,8 +125,16 @@ class InstagramToAppleMusic:
 
         self.logger.info(f"\nFound {len(songs)} unique songs")
 
-        # Step 2: Add songs to Apple Music
-        self.logger.info(f"\nStep 2: Adding songs to Apple Music")
+        # Step 2: Process songs (add to Apple Music or just save)
+        if self.output_only:
+            self.logger.info(f"\nStep 2: Saving songs to file")
+            # Ensure we have an output file for output-only mode
+            if not self.config.get('output_file'):
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                self.config['output_file'] = f"instagram_songs_{target_user}_{timestamp}.csv"
+                self.logger.info(f"No output file specified, using: {self.config['output_file']}")
+        else:
+            self.logger.info(f"\nStep 2: Adding songs to Apple Music")
         self.logger.info("-" * 80)
 
         results = self._process_songs(songs)
@@ -129,7 +142,7 @@ class InstagramToAppleMusic:
         # Step 3: Generate summary
         self._print_summary(results)
 
-        # Step 4: Save to CSV if requested
+        # Step 4: Save to CSV if requested or required
         if self.config.get('output_file'):
             self._save_to_csv(results)
 
@@ -159,6 +172,15 @@ class InstagramToAppleMusic:
 
         for i, song in enumerate(songs, 1):
             self.logger.info(f"\n[{i}/{len(songs)}] Processing: {song}")
+
+            if self.output_only:
+                self.logger.info("  [OUTPUT ONLY] Song will be saved to file")
+                results['added'].append({
+                    'song': song,
+                    'message': 'Saved to file - not added to Apple Music'
+                })
+                results['stats']['songs_added'] += 1
+                continue
 
             if self.dry_run:
                 self.logger.info("  [DRY RUN] Would search and add to Apple Music")
@@ -216,9 +238,13 @@ class InstagramToAppleMusic:
         self.logger.info("EXECUTION SUMMARY")
         self.logger.info("=" * 80)
         self.logger.info(f"Total songs found:     {stats['songs_found']}")
-        self.logger.info(f"Successfully added:    {stats['songs_added']}")
-        self.logger.info(f"Not found on Apple Music: {stats['songs_not_found']}")
-        self.logger.info(f"Failed to add:         {stats['songs_failed']}")
+
+        if self.output_only:
+            self.logger.info(f"Songs saved to file:   {stats['songs_added']}")
+        else:
+            self.logger.info(f"Successfully added:    {stats['songs_added']}")
+            self.logger.info(f"Not found on Apple Music: {stats['songs_not_found']}")
+            self.logger.info(f"Failed to add:         {stats['songs_failed']}")
 
         if results['not_found']:
             self.logger.info("\nSongs not found on Apple Music:")
@@ -305,6 +331,12 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        '--output-only',
+        action='store_true',
+        help='Only scrape and save to file, skip Apple Music integration'
+    )
+
+    parser.add_argument(
         '--output',
         help='Save results to CSV file'
     )
@@ -336,6 +368,7 @@ def load_config(args) -> Dict:
         'target_instagram_user': args.user or os.getenv('TARGET_INSTAGRAM_USER'),
         'max_posts': args.posts or int(os.getenv('MAX_POSTS', '100')),
         'dry_run': args.dry_run or os.getenv('DRY_RUN', 'false').lower() == 'true',
+        'output_only': args.output_only or os.getenv('OUTPUT_ONLY', 'false').lower() == 'true',
         'output_file': args.output,
         'log_level': args.log_level or os.getenv('LOG_LEVEL', 'INFO'),
         'apple_team_id': os.getenv('APPLE_TEAM_ID'),
